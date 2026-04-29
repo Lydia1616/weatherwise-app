@@ -1,34 +1,24 @@
 package com.example;
 
-import java.util.List;
-
-public class CityInfoModule 
-{
+public class CityInfoModule {
 
     private final DatabaseManager db = new DatabaseManager();
 
-    public CityInfo getCityInfo(String cityKey) 
-    {
-        return db.getCity(cityKey);
+    public CityInfo getCityInfo(String cityName) {
+        return db.getCity(cityName);
     }
 
-    public List<PlaceInfo> getPlacesForCity(String cityKey) 
-    {
-        return db.getPlaces(cityKey);
-    }
+    public void displayCityInfo(String cityName) {
+        CityInfo info = getCityInfo(cityName);
 
-    public void displayCityInfo(String cityKey) 
-    {
-        CityInfo info = getCityInfo(cityKey);
         if (info == null) {
-            System.out.println("  City not found: " + cityKey);
-            System.out.println("  Available: dehradun, mussoorie, rishikesh, haridwar");
+            System.out.println("City not found: " + cityName);
             return;
         }
-        System.out.println("\n    City: " + info.getName());
-        System.out.println("  ─────────────────────────────────────────");
-        System.out.println("    Location : " + info.getCountryState());
-        System.out.println("    About    : " + info.getDescription());
-        System.out.println("  ─────────────────────────────────────────");
+
+        System.out.println("\n--- City Info ---");
+        System.out.println("Name     : " + info.getName());
+        System.out.println("Location : " + info.getCountryState());
+        System.out.println("About    : " + info.getDescription());
     }
 }

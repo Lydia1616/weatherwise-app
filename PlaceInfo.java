@@ -1,30 +1,46 @@
 package com.example;
 
 public class PlaceInfo {
-
-    private final int    id;
-    private final String cityKey;
     private final String name;
-    private final String category;   // Park, Museum, Cafe, Temple, Market...
-    private final String placeType;  // INDOOR or OUTDOOR
-    private final int    popularity; // 1-100
+    private final String category;
+    private final String placeType;
+    private final int popularity;
+    private final String description;
+    private final String imagePath;
 
-    public PlaceInfo(int id, String cityKey, String name,
-                     String category, String placeType, int popularity) {
-        this.id         = id;
-        this.cityKey    = cityKey;
-        this.name       = name;
-        this.category   = category;
-        this.placeType  = placeType;
-        this.popularity = popularity;
+    public PlaceInfo(String name, String category) {
+        this(name, category, "Outdoor", 50, "", "");
     }
 
-    public int    getId()         { return id;         }
-    public String getCityKey()    { return cityKey;    }
-    public String getName()       { return name;       }
-    public String getCategory()   { return category;   }
-    public String getPlaceType()  { return placeType;  }
-    public int    getPopularity() { return popularity; }
+    public PlaceInfo(String name, String category, String placeType, int popularity) {
+        this(name, category, placeType, popularity, "", "");
+    }
 
-    public boolean isIndoor() { return "INDOOR".equalsIgnoreCase(placeType); }
+    public PlaceInfo(String name, String category, String placeType, int popularity, String description) {
+        this(name, category, placeType, popularity, description, "");
+    }
+
+    public PlaceInfo(String name, String category, String placeType, int popularity, String description, String imagePath) {
+        this.name = name;
+        this.category = category;
+        this.placeType = placeType;
+        this.popularity = popularity;
+        this.description = description;
+        this.imagePath = imagePath;
+    }
+
+    public String getName() { return name; }
+    public String getCategory() { return category; }
+    public String getPlaceType() { return placeType; }
+    public int getPopularity() { return popularity; }
+    public String getDescription() { return description; }
+    public String getImagePath() { return imagePath; }
+
+    public boolean isIndoor() {
+        return "Indoor".equalsIgnoreCase(placeType);
+    }
+
+    public boolean isOutdoor() {
+        return "Outdoor".equalsIgnoreCase(placeType);
+    }
 }

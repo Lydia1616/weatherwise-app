@@ -15,6 +15,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
@@ -57,9 +59,9 @@ public class WeatherWiseApp extends Application {
     private static final String RED = "#f85149";
     private static final String PURPLE = "#a5a0f7";
 
-    private final WeatherModule weatherModule = new WeatherModule();
-    private final DatabaseManager db = new DatabaseManager();
-    private final RecommendationModule recModule = new RecommendationModule();
+    private WeatherModule weatherModule;
+    private DatabaseManager db;
+    private RecommendationModule recModule;
 
     private final Map<String, DashboardCity> cities = buildCities();
     private String activeCityKey = "dehradun";
@@ -193,12 +195,10 @@ public class WeatherWiseApp extends Application {
         ColumnConstraints center = new ColumnConstraints();
         center.setHgrow(Priority.ALWAYS);
         center.setMinWidth(360);
-        ColumnConstraints right = new ColumnConstraints(260);
-        grid.getColumnConstraints().addAll(left, center, right);
+        grid.getColumnConstraints().addAll(left, center);
 
         grid.add(buildCitiesColumn(), 0, 0);
         grid.add(buildCenterColumn(), 1, 0);
-        grid.add(buildRightColumn(), 2, 0);
         return grid;
     }
 
@@ -259,7 +259,7 @@ public class WeatherWiseApp extends Application {
 
         VBox forecastCard = card();
         forecastRows = new VBox();
-        HBox forecastHeader = header("Next 7 Days", "See all");
+        HBox forecastHeader = header("Featured Places", "Weather matched");
         HBox tomorrow = new HBox();
         tomorrow.setAlignment(Pos.CENTER_LEFT);
         tomorrow.setPadding(new Insets(10, 14, 10, 14));
@@ -270,7 +270,7 @@ public class WeatherWiseApp extends Application {
         HBox.setHgrow(tomorrowSpacer, Priority.ALWAYS);
         tomorrowTempLabel = primaryText("");
         tomorrow.getChildren().addAll(tomorrowLabel, tomorrowSpacer, tomorrowTempLabel);
-        forecastCard.getChildren().addAll(forecastHeader, forecastRows, tomorrow);
+        forecastCard.getChildren().addAll(forecastHeader, forecastRows);
 
         VBox overview = card();
         HBox chartHeader = new HBox(10);
@@ -382,9 +382,15 @@ public class WeatherWiseApp extends Application {
         aqiLabel.setText(String.valueOf(city.aqi));
         uvLabel.setText(String.valueOf(city.uv));
         precipLabel.setText(city.precip + "%");
-        mapCityLabel.setText(city.name);
-        mapConditionLabel.setText(city.condition);
-        mapTempLabel.setText(city.temperature + "°C");
+        if (mapCityLabel != null) {
+            mapCityLabel.setText(city.name);
+        }
+        if (mapConditionLabel != null) {
+            mapConditionLabel.setText(city.condition);
+        }
+        if (mapTempLabel != null) {
+            mapTempLabel.setText(city.temperature + "°C");
+        }
         recTitleLabel.setText("Places to Visit in " + city.name);
 
         if (city.alert == null || city.alert.isBlank()) {
@@ -399,7 +405,9 @@ public class WeatherWiseApp extends Application {
         boolean shouldGoIndoor = city.precip > 30 || city.humidity > 78 || city.uv > 8;
         recSubtitleLabel.setText(shouldGoIndoor ? "⚠ Weather suggests indoor activities today" : "Based on current weather conditions");
         recSubtitleLabel.setTextFill(Color.web(shouldGoIndoor ? AMBER : TEXT_MUTED));
-        weatherTagLabel.setText(city.humidity > 75 ? "Wet Weather" : city.uv > 8 ? "Hot Day" : "Good Weather");
+        if (weatherTagLabel != null) {
+            weatherTagLabel.setText(city.humidity > 75 ? "Wet Weather" : city.uv > 8 ? "Hot Day" : "Good Weather");
+        }
         updateTabStyles();
 
         buildCityList();
@@ -415,23 +423,43 @@ public class WeatherWiseApp extends Application {
         city.liveWeatherLoading = true;
         Thread worker = new Thread(() -> {
             try {
-                WeatherData data = weatherModule.fetchWeather(city.name);
+                WeatherModule module = getWeatherModule();
+                if (module == null) {
+                    return;
+                }
+                WeatherData data = module.fetchWeather(city.name);
+                List<ForecastData> forecastData = module.fetchForecast(city.name);
+
                 if (data != null) {
                     city.condition = data.getCondition();
                     city.temperature = (int) Math.round(data.getTemperature());
                     city.humidity = (int) Math.round(data.getHumidity());
-                    Platform.runLater(() -> {
-                        if (city.name.equals(cities.get(activeCityKey).name)) {
-                            conditionLabel.setText(city.condition);
-                            tempLabel.setText(city.temperature + "°C");
-                            humidityLabel.setText(city.humidity + "%");
+                    city.wind = (int) Math.round(data.getWindSpeed());
+                }
+
+                if (forecastData != null && !forecastData.isEmpty()) {
+                    city.forecast = toForecastDays(forecastData);
+                    updateChartData(city);
+                }
+
+                Platform.runLater(() -> {
+                    if (city.name.equals(cities.get(activeCityKey).name)) {
+                        conditionLabel.setText(city.condition);
+                        tempLabel.setText(city.temperature + "°C");
+                        humidityLabel.setText(city.humidity + "%");
+                        windLabel.setText(city.wind + " km/h");
+                        if (mapConditionLabel != null) {
                             mapConditionLabel.setText(city.condition);
+                        }
+                        if (mapTempLabel != null) {
                             mapTempLabel.setText(city.temperature + "°C");
                         }
-                        buildCityList();
-                    });
-                }
-            } catch (RuntimeException ignored) {
+                        buildForecast(city);
+                        buildChart(city);
+                    }
+                    buildCityList();
+                });
+            } catch (Throwable ignored) {
                 // Keep the dashboard usable when the live weather service is offline.
             } finally {
                 city.liveWeatherLoaded = true;
@@ -440,6 +468,43 @@ public class WeatherWiseApp extends Application {
         });
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private List<ForecastDay> toForecastDays(List<ForecastData> forecastData) {
+        List<ForecastDay> forecast = new ArrayList<>();
+        for (ForecastData data : forecastData) {
+            String[] iconAndCondition = forecastIcon(data.getCondition());
+            forecast.add(new ForecastDay(
+                    data.getDate(),
+                    iconAndCondition[0],
+                    iconAndCondition[1],
+                    (int) Math.round(data.getMaxTemp()),
+                    (int) Math.round(data.getMinTemp()),
+                    data.getPrecipitationProbability()
+            ));
+        }
+        return forecast;
+    }
+
+    private String[] forecastIcon(String condition) {
+        String text = condition == null ? "" : condition.toLowerCase(Locale.ROOT);
+
+        if (text.contains("clear")) return new String[]{"☀", "Clear"};
+        if (text.contains("cloud")) return new String[]{"☁", "Cloudy"};
+        if (text.contains("rain")) return new String[]{"🌧", "Rain"};
+        if (text.contains("storm")) return new String[]{"⛈", "Storm"};
+        if (text.contains("fair")) return new String[]{"🌤", "Fair"};
+
+        return new String[]{"🌤", condition == null || condition.isBlank() ? "Fair" : condition};
+    }
+
+    private void updateChartData(DashboardCity city) {
+        int count = Math.min(7, city.forecast.size());
+        for (int i = 0; i < count; i++) {
+            ForecastDay day = city.forecast.get(i);
+            city.tempData[i] = (day.high + day.low) / 2;
+            city.rainData[i] = day.rainChance;
+        }
     }
 
     private void buildCityList() {
@@ -467,23 +532,66 @@ public class WeatherWiseApp extends Application {
 
     private void buildForecast(DashboardCity city) {
         forecastRows.getChildren().clear();
-        for (ForecastDay day : city.forecast) {
-            HBox row = new HBox(12);
-            row.setAlignment(Pos.CENTER_LEFT);
-            row.setPadding(new Insets(10, 0, 10, 0));
-            row.setStyle("-fx-border-color: transparent transparent " + BORDER + " transparent;");
-            Label dayLabel = fixedText(day.day, 80, TEXT_SECONDARY);
-            Label icon = fixedText(day.icon, 32, TEXT_PRIMARY);
-            Label cond = mutedText(day.condition);
-            Region spacer = new Region();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-            Label range = primaryText(day.high + "° / " + day.low + "°");
-            row.getChildren().addAll(dayLabel, icon, cond, spacer, range);
+
+        List<PlaceInfo> featuredPlaces = getFeaturedPlaces(city.name);
+        HBox row = new HBox(12);
+        row.setAlignment(Pos.TOP_LEFT);
+
+        int count = Math.min(3, featuredPlaces.size());
+        for (int i = 0; i < count; i++) {
+            row.getChildren().add(featuredPlaceCard(featuredPlaces.get(i)));
+        }
+
+        if (row.getChildren().isEmpty()) {
+            Label empty = mutedText("No featured places available for this city yet.");
+            forecastRows.getChildren().add(empty);
+        } else {
             forecastRows.getChildren().add(row);
         }
-        ForecastDay tomorrow = city.forecast.size() > 1 ? city.forecast.get(1) : city.forecast.get(0);
-        tomorrowLabel.setText(tomorrow.icon + " Tomorrow - " + tomorrow.condition);
-        tomorrowTempLabel.setText(tomorrow.high + "°C");
+    }
+
+    private List<PlaceInfo> getFeaturedPlaces(String cityName) {
+        RecommendationModule module = getRecommendationModule();
+        if (module == null) {
+            return new ArrayList<>();
+        }
+        List<PlaceInfo> places = module.recommend(cityName);
+        return places == null ? new ArrayList<>() : places;
+    }
+
+    private Node featuredPlaceCard(PlaceInfo place) {
+        VBox card = new VBox(8);
+        card.setPrefWidth(310);
+        card.setPadding(new Insets(10));
+        card.setStyle("-fx-background-color:" + BG_CARD_2 + "; -fx-border-color:" + BORDER + "; -fx-background-radius: 10; -fx-border-radius: 10;");
+
+        ImageView imageView = placeImage(place.getImagePath(), 290, 135);
+        Label name = primaryText(place.getName());
+        Label type = mutedText(place.getPlaceType() + " • " + place.getCategory());
+        Label reason = mutedText(place.getDescription());
+        reason.setWrapText(true);
+        Label badge = pill("Popularity " + place.getPopularity(), BLUE, "rgba(88,166,255,0.14)");
+
+        card.getChildren().addAll(imageView, name, type, reason, badge);
+        return card;
+    }
+
+    private ImageView placeImage(String imagePath, double width, double height) {
+        Image image = null;
+        if (imagePath != null && !imagePath.isBlank()) {
+            try {
+                image = new Image(getClass().getResourceAsStream(imagePath));
+            } catch (Exception ignored) {
+                image = null;
+            }
+        }
+
+        ImageView imageView = image == null || image.isError() ? new ImageView() : new ImageView(image);
+        imageView.setFitWidth(width);
+        imageView.setFitHeight(height);
+        imageView.setPreserveRatio(false);
+        imageView.setStyle("-fx-background-color:" + BG_ACCENT + ";");
+        return imageView;
     }
 
     private void buildChart(DashboardCity city) {
@@ -514,7 +622,7 @@ public class WeatherWiseApp extends Application {
                 data = city.tempData;
                 break;
         }
-        String[] labels = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        String[] labels = chartDayLabels();
         for (int i = 0; i < labels.length; i++) {
             series.getData().add(new XYChart.Data<>(labels[i], data[i]));
         }
@@ -522,9 +630,29 @@ public class WeatherWiseApp extends Application {
         chartHolder.getChildren().setAll(chart);
     }
 
+    private String forecastDayLabel(int dayOffset) {
+        if (dayOffset == 0) {
+            return "Today";
+        }
+        if (dayOffset == 1) {
+            return "Tomorrow";
+        }
+        return LocalDate.now().plusDays(dayOffset).format(DateTimeFormatter.ofPattern("EEE"));
+    }
+
+    private String[] chartDayLabels() {
+        String[] labels = new String[7];
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = LocalDate.now().plusDays(i).format(DateTimeFormatter.ofPattern("EEE"));
+        }
+        return labels;
+    }
+
     private void buildPlaces(DashboardCity city) {
         placesGrid.getChildren().clear();
-        topPicksBox.getChildren().clear();
+        if (topPicksBox != null) {
+            topPicksBox.getChildren().clear();
+        }
 
         List<PlaceCard> places = new ArrayList<>(activeRecommendationTab.equals("indoor") ? city.indoor : city.outdoor);
         if (activeRecommendationTab.equals("outdoor")) {
@@ -541,7 +669,7 @@ public class WeatherWiseApp extends Application {
         for (int i = 0; i < places.size(); i++) {
             PlaceCard place = places.get(i);
             placesGrid.add(placeTile(place), i % 2, i / 2);
-            if (i < 3) {
+            if (topPicksBox != null && i < 3) {
                 topPicksBox.getChildren().add(compactPlace(place));
             }
         }
@@ -551,13 +679,17 @@ public class WeatherWiseApp extends Application {
         Thread worker = new Thread(() -> {
             List<PlaceCard> fetchedPlaces = new ArrayList<>();
             try {
-                List<PlaceInfo> backendPlaces = recModule.recommend(cityName);
+                RecommendationModule module = getRecommendationModule();
+                if (module == null) {
+                    return;
+                }
+                List<PlaceInfo> backendPlaces = module.recommend(cityName);
                 if (backendPlaces != null) {
                     for (PlaceInfo place : backendPlaces) {
                         fetchedPlaces.add(new PlaceCard(place.getName(), place.getCategory(), "📍", "Recommended", BLUE));
                     }
                 }
-            } catch (RuntimeException ignored) {
+            } catch (Throwable ignored) {
                 // Static places remain visible if backend recommendations fail.
             }
             backendRecommendationCache.put(cityName, fetchedPlaces);
@@ -570,6 +702,39 @@ public class WeatherWiseApp extends Application {
         });
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private WeatherModule getWeatherModule() {
+        if (weatherModule == null) {
+            try {
+                weatherModule = new WeatherModule();
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return weatherModule;
+    }
+
+    private RecommendationModule getRecommendationModule() {
+        if (recModule == null) {
+            try {
+                recModule = new RecommendationModule();
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return recModule;
+    }
+
+    private DatabaseManager getDatabaseManager() {
+        if (db == null) {
+            try {
+                db = new DatabaseManager();
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return db;
     }
 
     private Node placeTile(PlaceCard place) {
@@ -847,13 +1012,14 @@ public class WeatherWiseApp extends Application {
         private String condition;
         private int humidity;
         private boolean liveWeatherLoaded;
-        private final int wind;
+        private boolean liveWeatherLoading;
+        private int wind;
         private final int visibility;
         private final int aqi;
         private final int uv;
         private final int precip;
         private final String alert;
-        private final List<ForecastDay> forecast;
+        private List<ForecastDay> forecast;
         private final int[] tempData;
         private final int[] humidityData;
         private final int[] rainData;
@@ -887,13 +1053,19 @@ public class WeatherWiseApp extends Application {
         private final String condition;
         private final int high;
         private final int low;
+        private final int rainChance;
 
         private ForecastDay(String day, String icon, String condition, int high, int low) {
+            this(day, icon, condition, high, low, 0);
+        }
+
+        private ForecastDay(String day, String icon, String condition, int high, int low, int rainChance) {
             this.day = day;
             this.icon = icon;
             this.condition = condition;
             this.high = high;
             this.low = low;
+            this.rainChance = rainChance;
         }
     }
 

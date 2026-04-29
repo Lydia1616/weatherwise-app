@@ -1,61 +1,42 @@
 package com.example;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class DatabaseManager {
-
-    private final Map<String, CityInfo> cityMap = new HashMap<>();
-    private final List<PlaceInfo> allPlaces = new ArrayList<>();
+    private final Map<String, CityInfo> cities = new HashMap<>();
 
     public DatabaseManager() {
-        loadMockData();
+        cities.put("dehradun", new CityInfo(
+                "Dehradun",
+                "Uttarakhand, India",
+                "Dehradun is the capital of Uttarakhand, known for valleys, caves, institutes, monasteries, and access to nearby hill stations."
+        ));
+
+        cities.put("mussoorie", new CityInfo(
+                "Mussoorie",
+                "Uttarakhand, India",
+                "Mussoorie is a popular hill station known for viewpoints, Mall Road, waterfalls, cafes, and cool mountain weather."
+        ));
+
+        cities.put("haridwar", new CityInfo(
+                "Haridwar",
+                "Uttarakhand, India",
+                "Haridwar is a spiritual city on the Ganga, famous for Har Ki Pauri, temples, ghats, and evening aarti."
+        ));
+
+        cities.put("rishikesh", new CityInfo(
+                "Rishikesh",
+                "Uttarakhand, India",
+                "Rishikesh is known for yoga, rafting, temples, river views, cafes, and adventure activities."
+        ));
     }
 
-    private void loadMockData() {
-        // ── Add Cities ────────────────────────────────────────
-        cityMap.put("dehradun", new CityInfo("dehradun", "Dehradun", "India (UK)", "Capital of Uttarakhand in the Doon Valley."));
-        cityMap.put("mussoorie", new CityInfo("mussoorie", "Mussoorie", "India (UK)", "Queen of Hills, ~35 km from Dehradun."));
-        cityMap.put("rishikesh", new CityInfo("rishikesh", "Rishikesh", "India (UK)", "Yoga Capital of the World on the Ganga."));
-
-        // ── Add Places (ID, CityKey, Name, Category, Type, Popularity) ──
-        allPlaces.add(new PlaceInfo(1, "dehradun", "Robber's Cave", "Nature", "OUTDOOR", 85));
-        allPlaces.add(new PlaceInfo(2, "dehradun", "Forest Research Institute", "Museum", "INDOOR", 90));
-        allPlaces.add(new PlaceInfo(3, "dehradun", "Paltan Bazaar", "Market", "INDOOR", 70));
-        allPlaces.add(new PlaceInfo(4, "dehradun", "Tapkeshwar Temple", "Temple", "OUTDOOR", 78));
-        
-        allPlaces.add(new PlaceInfo(5, "mussoorie", "Kempty Falls", "Nature", "OUTDOOR", 88));
-        allPlaces.add(new PlaceInfo(6, "mussoorie", "Mall Road", "Market", "OUTDOOR", 85));
-        
-        allPlaces.add(new PlaceInfo(7, "rishikesh", "Lakshman Jhula", "Landmark", "OUTDOOR", 90));
-        allPlaces.add(new PlaceInfo(8, "rishikesh", "Beatles Ashram", "Museum", "INDOOR", 78));
-    }
-
-    public CityInfo getCity(String cityKey) {
-        return cityMap.get(cityKey.toLowerCase().trim());
-    }
-
-    public List<PlaceInfo> getPlaces(String cityKey) {
-        String key = cityKey.toLowerCase().trim();
-        List<PlaceInfo> result = new ArrayList<>();
-        for (PlaceInfo p : allPlaces) {
-            if (p.getCityKey().equals(key)) {
-                result.add(p);
-            }
+    public CityInfo getCity(String cityName) {
+        if (cityName == null) {
+            return null;
         }
-        return result;
-    }
 
-    public List<PlaceInfo> searchPlaces(String keyword) {
-        String k = keyword.toLowerCase().trim();
-        List<PlaceInfo> result = new ArrayList<>();
-        for (PlaceInfo p : allPlaces) {
-            if (p.getName().toLowerCase().contains(k) || p.getCategory().toLowerCase().contains(k)) {
-                result.add(p);
-            }
-        }
-        return result;
+        return cities.get(cityName.trim().toLowerCase());
     }
 }
